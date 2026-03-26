@@ -1,12 +1,19 @@
 # filters.py
 import re
 
-# Institutional Regex Matrix
+# Upgraded Institutional Regex Matrix for Geopolitics & Macro
 FILTER_MATRIX = {
-    "TRUMP_POLICY": re.compile(r'\b(trump|potus|47)\b.*\b(tariff|sanction|executive order|veto|pardon|sign|china|mexico|nato)\b', re.IGNORECASE),
+    # Catches Trump alongside major geopolitical actors or actions
+    "TRUMP_POLICY": re.compile(r'\b(trump|potus|47)\b.*\b(tariff|sanction|pardon|veto|china|mexico|nato|iran|russia|ukraine|israel|putin)\b', re.IGNORECASE),
+    
+    # Standard Fed & Macro events
     "FED_MACRO": re.compile(r'\b(fomc|powell|yellen|cpi|ppi|nfp|inflation|basis points?|bps|rate (cut|hike|decision))\b', re.IGNORECASE),
-    "GEO_ESCALATION": re.compile(r'\b(nuclear|airstrike|ballistic|mobilization|strait of hormuz|blockade|brics|embargo)\b', re.IGNORECASE),
-    "COMMODITIES": re.compile(r'\b(opec\+?|brent crude|wti|strategic petroleum reserve|spr|gold|lng|supply chain)\b', re.IGNORECASE)
+    
+    # Expanded to include major regional conflicts and military actions
+    "GEO_ESCALATION": re.compile(r'\b(nuclear|airstrike|ballistic|mobilization|strait of hormuz|blockade|brics|embargo|idf|houthis|irgc|hezbollah|nato|escalation)\b', re.IGNORECASE),
+    
+    # Expanded for energy markets
+    "COMMODITIES": re.compile(r'\b(opec\+?|brent crude|wti|strategic petroleum reserve|spr|gold|lng|supply chain|barrel)\b', re.IGNORECASE)
 }
 
 def analyze_text(text: str) -> str:
