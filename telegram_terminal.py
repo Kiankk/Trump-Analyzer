@@ -17,7 +17,6 @@ console = Console()
 
 # --- 1. SECURE CREDENTIALS ---
 try:
-    # We must cast the API_ID to an integer for Telethon
     API_ID = int(os.getenv('TG_API_ID')) 
     API_HASH = os.getenv('TG_API_HASH')
     
@@ -29,7 +28,16 @@ except (TypeError, ValueError):
     exit(1)
 
 # --- 2. TARGET CHANNELS & FILTER MATRIX ---
-TARGET_CHANNELS = ['tree_news', 'FirstSquawk', 'tier10k', 'geopolitics_live'] 
+# Updated with your specific geopolitical and macro sources
+TARGET_CHANNELS = [
+    'newrulesgeo', 
+    'rybar_in_english', 
+    'intelslava', 
+    'ClashReport', 
+    'worldnews'
+] 
+
+# You might want to expand this list later to include oil, nato, brics, etc.
 KEYWORDS = ["trump", "potus", "tariff", "china", "fed", "powell", "cpi", "nfp", "fomc", "white house", "rates", "sec"]
 
 # State management
@@ -46,7 +54,7 @@ def generate_dashboard() -> Panel:
 
     return Panel(
         table, 
-        title="[bold yellow]⚡ TERMINAL: DIRECT FIREHOSE ⚡[/bold yellow]", 
+        title="[bold yellow]⚡ TERMINAL: GEOPOLITICAL & MACRO FIREHOSE ⚡[/bold yellow]", 
         border_style="blue"
     )
 
@@ -83,7 +91,7 @@ async def main():
     recent_alerts.appendleft({
         'time': datetime.now().strftime('%H:%M:%S'),
         'keyword': "SYSTEM",
-        'title': "MTProto Connection Established. SECURE MODE ACTIVE."
+        'title': "Geopolitical MTProto Connection Established. SECURE MODE ACTIVE."
     })
 
     with Live(generate_dashboard(), screen=True) as live_ui:
@@ -98,4 +106,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         console.clear()
         print("\nTerminal shut down safely.")
-        
