@@ -98,3 +98,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         console.clear()
         print("\nTerminal shut down safely.")
+        
