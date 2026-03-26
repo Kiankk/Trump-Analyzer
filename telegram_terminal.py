@@ -1,5 +1,6 @@
 import os
 import asyncio
+import re
 from datetime import datetime
 from collections import deque
 from telethon import TelegramClient, events
@@ -10,25 +11,18 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.console import Console
 
-# Load environment variables from the .env file
 load_dotenv()
-
 console = Console()
 
-# --- 1. SECURE CREDENTIALS ---
 try:
     API_ID = int(os.getenv('TG_API_ID')) 
     API_HASH = os.getenv('TG_API_HASH')
-    
     if not API_ID or not API_HASH:
         raise ValueError
 except (TypeError, ValueError):
-    console.print("[bold red]CRITICAL ERROR:[/bold red] Missing or invalid credentials in .env file.")
-    console.print("Please check your .env file and ensure TG_API_ID and TG_API_HASH are set.")
+    console.print("[bold red]CRITICAL ERROR:[/bold red] Missing credentials in .env file.")
     exit(1)
 
-# --- 2. TARGET CHANNELS & FILTER MATRIX ---
-# Updated with your specific geopolitical and macro sources
 TARGET_CHANNELS = [
     'newrulesgeo', 
     'rybar_in_english', 
@@ -37,20 +31,31 @@ TARGET_CHANNELS = [
     'worldnews'
 ] 
 
-# You might want to expand this list later to include oil, nato, brics, etc.
-KEYWORDS = ["trump", "potus", "tariff", "china", "fed", "powell", "cpi", "nfp", "fomc", "white house", "rates", "sec"]
+# --- 3. THE INSTITUTIONAL FILTER MATRIX (REGEX) ---
+# We compile these expressions for lightning-fast matching.
+# \b ensures we match exact words (so 'rate' doesn't trigger on 'corporate')
+FILTER_MATRIX = {
+    "TRUMP_POLICY": re.compile(r'\b(trump|potus|47)\b.*\b(tariff|sanction|executive order|veto|pardon|sign|china|mexico|nato)\b', re.IGNORECASE),
+    "FED_MACRO": re.compile(r'\b(fomc|powell|yellen|cpi|ppi|nfp|inflation|basis points?|bps|rate (cut|hike|decision))\b', re.IGNORECASE),
+    "GEO_ESCALATION": re.compile(r'\b(nuclear|airstrike|ballistic|mobilization|strait of hormuz|blockade|brics|embargo)\b', re.IGNORECASE),
+    "COMMODITIES": re.compile(r'\b(opec\+?|brent crude|wti|strategic petroleum reserve|spr|gold|lng|supply chain)\b', re.IGNORECASE)
+}
 
-# State management
 recent_alerts = deque(maxlen=15)
 
 def generate_dashboard() -> Panel:
     table = Table(show_lines=True, header_style="bold cyan", expand=True)
     table.add_column("Time", justify="left", style="dim", width=10)
-    table.add_column("Catalyst", justify="center", style="bold red", width=12)
+    # Upgraded column to show the Category of the alert
+    table.add_column("Category", justify="center", style="bold red", width=16) 
     table.add_column("Live Feed (Zero Latency)", justify="left", style="white")
 
     for alert in recent_alerts:
-        table.add_row(alert['time'], alert['keyword'], alert['title'])
+        # Dynamically color the category tag based on what it is
+        cat_style = alert['category']
+        styled_cat = f"[bold yellow]{cat_style}[/bold yellow]" if "TRUMP" in cat_style else f"[bold magenta]{cat_style}[/bold magenta]"
+        
+        table.add_row(alert['time'], styled_cat, alert['title'])
 
     return Panel(
         table, 
@@ -75,23 +80,30 @@ async def main():
         if not text: 
             return
             
-        text_lower = text.lower()
-        triggered_keyword = next((kw for kw in KEYWORDS if kw in text_lower), None)
+        # Clean text for display first
+        clean_text = text.replace('\n', ' | ')
         
-        if triggered_keyword:
-            print("\a", end="") 
-            clean_text = text.replace('\n', ' | ')
+        # --- THE FILTER GATE ---
+        triggered_category = None
+        
+        for category_name, regex_pattern in FILTER_MATRIX.items():
+            if regex_pattern.search(text):
+                triggered_category = category_category_name
+                break # Stop searching once we find a match
+        
+        if triggered_category:
+            print("\a", end="") # Audio beep
             
             recent_alerts.appendleft({
                 'time': datetime.now().strftime('%H:%M:%S'),
-                'keyword': triggered_keyword.upper(),
+                'category': triggered_category,
                 'title': clean_text[:120] + ('...' if len(clean_text) > 120 else '')
             })
 
     recent_alerts.appendleft({
         'time': datetime.now().strftime('%H:%M:%S'),
-        'keyword': "SYSTEM",
-        'title': "Geopolitical MTProto Connection Established. SECURE MODE ACTIVE."
+        'category': "SYSTEM",
+        'title': "Regex Filter Engine Online. SECURE MODE ACTIVE."
     })
 
     with Live(generate_dashboard(), screen=True) as live_ui:
