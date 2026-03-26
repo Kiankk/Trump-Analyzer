@@ -88,7 +88,7 @@ async def main():
         
         for category_name, regex_pattern in FILTER_MATRIX.items():
             if regex_pattern.search(text):
-                triggered_category = category_category_name
+                triggered_category = category_name
                 break # Stop searching once we find a match
         
         if triggered_category:
