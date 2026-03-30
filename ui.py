@@ -27,7 +27,15 @@ def render_dashboard() -> Panel:
         cat_style = alert['category']
         # Dynamic color coding based on the event type
         styled_cat = f"[bold yellow]{cat_style}[/bold yellow]" if "TRUMP" in cat_style else f"[bold magenta]{cat_style}[/bold magenta]"
-        table.add_row(alert['time'], alert['source'], styled_cat, alert['title'])
+        # Dynamic color coding based on the source
+        src = alert['source']
+        if src == 'FIN_JUICE':
+            styled_src = f"[bold green]{src}[/bold green]"
+        elif src == 'TELEGRAM':
+            styled_src = f"[bold blue]{src}[/bold blue]"
+        else:
+            styled_src = f"[bold cyan]{src}[/bold cyan]"
+        table.add_row(alert['time'], styled_src, styled_cat, alert['title'])
 
     return Panel(
         table, 

@@ -30,7 +30,8 @@ TARGET_CHANNELS = ['newrulesgeo', 'rybar_in_english', 'intelslava', 'ClashReport
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q=%22Donald+Trump%22+OR+POTUS+OR+Tariffs+when:1h",
     "https://news.google.com/rss/search?q=Federal+Reserve+OR+CPI+OR+NFP+OR+Powell+when:1h",
-    "https://finance.yahoo.com/news/rssindex"
+    "https://finance.yahoo.com/news/rssindex",
+    "https://www.financialjuice.com/feed.ashx?xy=rss"
 ]
 
 seen_rss_links = set()
@@ -56,8 +57,9 @@ async def poll_rss_feeds():
             tasks = [fetch_rss(session, url) for url in RSS_FEEDS]
             results = await asyncio.gather(*tasks)
             
-            for feed in results:
+            for url, feed in zip(RSS_FEEDS, results):
                 if not feed or not hasattr(feed, 'entries'): continue
+                source_label = 'FIN_JUICE' if 'financialjuice' in url else 'WEB/RSS'
                 
                 for entry in feed.entries:
                     if entry.link in seen_rss_links: continue
@@ -66,7 +68,7 @@ async def poll_rss_feeds():
                     category = analyze_text(entry.title)
                     if category:
                         print("\a", end="") # System Beep
-                        push_alert(datetime.now().strftime('%H:%M:%S'), 'WEB/RSS', category, entry.title[:120])
+                        push_alert(datetime.now().strftime('%H:%M:%S'), source_label, category, entry.title[:120])
                         seen_rss_links.add(entry.link)
             
             await asyncio.sleep(15)

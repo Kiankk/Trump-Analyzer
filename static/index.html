@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squawk Box — Real-Time Financial News Engine</title>
+    <meta name="description" content="Institutional-grade, real-time financial news aggregator with AI filtering and audio squawk.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+<body>
+
+    <!-- ═══ Audio Activation Overlay ═══ -->
+    <div id="audio-gate" class="audio-gate">
+        <div class="gate-content">
+            <div class="gate-icon">⚡</div>
+            <h1>SQUAWK BOX</h1>
+            <p>Real-Time Financial News Engine</p>
+            <button id="gate-btn" class="gate-btn">
+                <span class="btn-icon">🔊</span>
+                ACTIVATE LIVE FEED
+            </button>
+            <p class="gate-sub">Click to enable audio alerts & live data stream</p>
+        </div>
+    </div>
+
+    <!-- ═══ Main Application ═══ -->
+    <div id="app" class="app hidden">
+
+        <!-- ─── Top Bar ─── -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <span class="logo">⚡ SQUAWK BOX</span>
+                <span id="conn-status" class="conn-badge disconnected">
+                    <span class="conn-dot"></span>
+                    <span class="conn-text">CONNECTING</span>
+                </span>
+            </div>
+            <div class="topbar-center">
+                <span id="clock" class="clock">--:--:--</span>
+                <span class="separator">│</span>
+                <span id="headline-count" class="stat-badge">0 headlines</span>
+            </div>
+            <div class="topbar-right">
+                <button id="audio-toggle" class="icon-btn audio-on" title="Toggle Audio Squawk">
+                    <span class="btn-label">🔊 SQUAWK</span>
+                </button>
+                <button id="clear-btn" class="icon-btn" title="Clear Feed">
+                    <span class="btn-label">🗑 CLEAR</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ─── Filter Bar ─── -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <span class="filter-label">SOURCES</span>
+                <button class="filter-chip active" data-filter-type="source" data-value="FIN_JUICE">
+                    <span class="chip-dot" style="background:#10b981"></span>FIN_JUICE
+                </button>
+                <button class="filter-chip active" data-filter-type="source" data-value="WEB/RSS">
+                    <span class="chip-dot" style="background:#6366f1"></span>WEB/RSS
+                </button>
+                <button class="filter-chip active" data-filter-type="source" data-value="TELEGRAM">
+                    <span class="chip-dot" style="background:#3b82f6"></span>TELEGRAM
+                </button>
+                <button class="filter-chip active" data-filter-type="source" data-value="SEC_EDGAR">
+                    <span class="chip-dot" style="background:#f59e0b"></span>SEC_EDGAR
+                </button>
+            </div>
+            <div class="filter-divider"></div>
+            <div class="filter-group">
+                <span class="filter-label">CATEGORIES</span>
+                <button class="filter-chip active" data-filter-type="category" data-value="FED_SPEAK">
+                    <span class="chip-dot" style="background:#f43f5e"></span>FED SPEAK
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="MACRO_DATA">
+                    <span class="chip-dot" style="background:#ec4899"></span>MACRO DATA
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="TRUMP_POLICY">
+                    <span class="chip-dot" style="background:#eab308"></span>TRUMP
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="GEO_RISK">
+                    <span class="chip-dot" style="background:#ef4444"></span>GEO RISK
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="COMMODITIES">
+                    <span class="chip-dot" style="background:#f97316"></span>COMMODITIES
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="MARKET_FLOW">
+                    <span class="chip-dot" style="background:#22d3ee"></span>MKT FLOW
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="EARNINGS">
+                    <span class="chip-dot" style="background:#a78bfa"></span>EARNINGS
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="SEC_FILING">
+                    <span class="chip-dot" style="background:#f59e0b"></span>SEC FILING
+                </button>
+                <button class="filter-chip active" data-filter-type="category" data-value="BREAKING">
+                    <span class="chip-dot" style="background:#22c55e"></span>BREAKING
+                </button>
+            </div>
+        </div>
+
+        <!-- ─── Main Feed ─── -->
+        <main class="feed-container">
+            <div id="feed" class="feed">
+                <!-- Headlines injected here by JS -->
+                <div id="empty-state" class="empty-state">
+                    <div class="empty-icon">📡</div>
+                    <p class="empty-title">Scanning data sources...</p>
+                    <p class="empty-sub">Headlines will appear here as they arrive from RSS, Telegram, SEC EDGAR, and FinancialJuice feeds.</p>
+                    <div class="pulse-ring"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ─── Stats Footer ─── -->
+        <footer class="stats-bar">
+            <div class="stats-left">
+                <span class="stat-item">
+                    <span class="stat-key">FIN_JUICE</span>
+                    <span id="stat-finjuice" class="stat-val source-finjuice">0</span>
+                </span>
+                <span class="stat-item">
+                    <span class="stat-key">WEB/RSS</span>
+                    <span id="stat-rss" class="stat-val source-rss">0</span>
+                </span>
+                <span class="stat-item">
+                    <span class="stat-key">TELEGRAM</span>
+                    <span id="stat-telegram" class="stat-val source-telegram">0</span>
+                </span>
+                <span class="stat-item">
+                    <span class="stat-key">SEC</span>
+                    <span id="stat-sec" class="stat-val source-sec">0</span>
+                </span>
+            </div>
+            <div class="stats-right">
+                <span class="stat-item">
+                    <span class="stat-key">ENGINE</span>
+                    <span class="stat-val engine-tag">FOSS v1.0</span>
+                </span>
+                <span class="stat-item">
+                    <span class="stat-key">TTS</span>
+                    <span class="stat-val">EDGE-TTS</span>
+                </span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

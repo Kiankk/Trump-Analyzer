@@ -1,0 +1,16 @@
+# Core Backend
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+aiohttp>=3.9.0
+feedparser>=6.0.0
+python-dotenv>=1.0.0
+
+# Telegram (existing)
+telethon>=1.34.0
+
+# Text-to-Speech
+edge-tts>=6.1.0
+
+# Data
+rich>=13.0.0
