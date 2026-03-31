@@ -150,29 +150,40 @@ async def dispatcher():
             headline: Headline = await headline_queue.get()
             h_dict = headline.to_dict()
 
-            # ─── TTS Generation ─────────────────────────────────
-            try:
-                audio_file = await synthesize_headline(headline.title)
-                h_dict['audio_url'] = f"/static/audio/{audio_file}"
-            except Exception as e:
-                logger.warning(f"TTS skipped: {e}")
-                h_dict['audio_url'] = None
-
-            # ─── Store ──────────────────────────────────────────
+            # ─── Store & Stats ──────────────────────────────────
             recent_headlines.appendleft(h_dict)
-
-            # ─── Stats ──────────────────────────────────────────
             stats["total"] += 1
             stats["by_source"][headline.source] = stats["by_source"].get(headline.source, 0) + 1
             stats["by_category"][headline.category] = stats["by_category"].get(headline.category, 0) + 1
 
-            # ─── Broadcast ──────────────────────────────────────
+            # ─── 1. Instant Text Broadcast ──────────────────────
+            # Push to UI immediately with zero latency
             await broadcast_headline(h_dict)
-
             logger.info(
                 f"▶ [{headline.source}] {headline.category} "
                 f"({headline.sentiment}) → {len(connected_clients)} clients"
             )
+
+            # ─── 2. Async TTS Generation ────────────────────────
+            # Generate audio in background without blocking the UI
+            async def _generate_and_push_audio(hd):
+                try:
+                    audio_file = await synthesize_headline(hd['title'])
+                    audio_url = f"/static/audio/{audio_file}"
+                    hd['audio_url'] = audio_url
+                    
+                    # Push 'audio_ready' event to clients
+                    if connected_clients:
+                        msg = json.dumps({"type": "audio_ready", "id": hd['id'], "audio_url": audio_url})
+                        for ws in list(connected_clients):
+                            try:
+                                await ws.send_text(msg)
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.warning(f"TTS skipped for {hd['id']}: {e}")
+
+            asyncio.create_task(_generate_and_push_audio(h_dict))
 
         except Exception as e:
             logger.error(f"Dispatcher error: {e}")

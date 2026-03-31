@@ -142,6 +142,10 @@ function handleMessage(msg) {
             if (msg.data) updateStatsFromServer(msg.data);
             break;
 
+        case 'audio_ready':
+            attachAudioToHeadline(msg.id, msg.audio_url);
+            break;
+
         case 'pong':
             break;
 
@@ -193,6 +197,7 @@ function addHeadline(data, isNew) {
     el.className = `headline priority-${data.priority || 0}`;
     el.dataset.source = data.source;
     el.dataset.category = data.category;
+    el.dataset.id = data.id;
 
     if (!visible) {
         el.style.display = 'none';
@@ -215,7 +220,7 @@ function addHeadline(data, isNew) {
         ${data.audio_url ? `<span class="hl-audio" data-audio="${escapeHtml(data.audio_url)}" title="Play audio">🔊</span>` : ''}
     `;
 
-    // Audio click handler
+    // Audio click handler (if audio_url was already generated, e.g. historical load)
     const audioBtn = el.querySelector('.hl-audio');
     if (audioBtn) {
         audioBtn.addEventListener('click', () => {
@@ -231,9 +236,38 @@ function addHeadline(data, isNew) {
         dom.feed.removeChild(dom.feed.lastChild);
     }
 
-    // Auto-play audio for new headlines
+    // The text arrived! Play instant alert beep before TTS is even ready.
+    if (isNew && visible && state.audioEnabled && data.priority > 0) {
+        playAlertBeep(data.priority);
+    }
+
+    // If historical load already has audio
     if (isNew && data.audio_url && state.audioEnabled && visible) {
         enqueueAudio(data.audio_url);
+    }
+}
+
+function attachAudioToHeadline(id, url) {
+    const el = document.querySelector(`.headline[data-id="${id}"]`);
+    if (!el) return;
+    
+    if (el.querySelector('.hl-audio')) return;
+
+    const audioBtn = document.createElement('span');
+    audioBtn.className = 'hl-audio';
+    audioBtn.dataset.audio = url;
+    audioBtn.title = 'Play audio';
+    audioBtn.textContent = '🔊';
+    
+    audioBtn.addEventListener('click', () => {
+        playAudio(url, audioBtn);
+    });
+    
+    el.appendChild(audioBtn);
+
+    // Enqueue the voice generation
+    if (state.audioEnabled && el.style.display !== 'none') {
+        enqueueAudio(url);
     }
 }
 
@@ -241,6 +275,38 @@ function addHeadline(data, isNew) {
 // ═══════════════════════════════════════════════════════════════
 //  AUDIO ENGINE
 // ═══════════════════════════════════════════════════════════════
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playAlertBeep(priority) {
+    if (!state.audioEnabled) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    if (priority >= 2) {
+        // High priority: Sharp descending alert
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.15);
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    } else {
+        // Normal priority: Short ping
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, audioCtx.currentTime); // E5
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+    }
+}
 
 function enqueueAudio(url) {
     state.audioQueue.push(url);
