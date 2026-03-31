@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squawk Box — Real-Time Financial News Engine</title>
+    <title>Squawk Box — LLM News Trading Engine</title>
     <meta name="description" content="Institutional-grade, real-time financial news aggregator with AI filtering and audio squawk.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,6 +44,13 @@
                 <span id="headline-count" class="stat-badge">0 headlines</span>
             </div>
             <div class="topbar-right">
+                <button id="view-news-btn" class="icon-btn view-active" title="News Feed">
+                    <span class="btn-label">📰 NEWS</span>
+                </button>
+                <button id="view-trading-btn" class="icon-btn" title="Trading Panel">
+                    <span class="btn-label">📊 TRADING</span>
+                </button>
+                <span class="topbar-divider"></span>
                 <button id="audio-toggle" class="icon-btn audio-on" title="Toggle Audio Squawk">
                     <span class="btn-label">🔊 SQUAWK</span>
                 </button>
@@ -103,8 +110,8 @@
             </div>
         </div>
 
-        <!-- ─── Main Feed ─── -->
-        <main class="feed-container">
+        <!-- ─── Main Feed (News View) ─── -->
+        <main id="news-view" class="feed-container">
             <div id="feed" class="feed">
                 <!-- Headlines injected here by JS -->
                 <div id="empty-state" class="empty-state">
@@ -114,6 +121,106 @@
                     <div class="pulse-ring"></div>
                 </div>
             </div>
+        </main>
+
+        <!-- ─── Trading View ─── -->
+        <main id="trading-view" class="feed-container hidden">
+
+            <!-- Trading Controls Bar -->
+            <div class="trading-controls">
+                <div class="tc-left">
+                    <button id="trading-toggle-btn" class="trading-btn trading-off">
+                        <span class="trading-dot"></span>
+                        <span id="trading-toggle-label">AUTO-TRADE OFF</span>
+                    </button>
+                    <span class="tc-mode-badge" id="tc-mode">📝 PAPER MODE</span>
+                    <span class="tc-llm-badge" id="tc-llm">
+                        <span class="llm-dot offline"></span>
+                        <span id="tc-llm-text">LLM CHECKING...</span>
+                    </span>
+                </div>
+                <div class="tc-right">
+                    <button id="close-all-btn" class="kill-btn" title="Close All Positions">
+                        🛑 CLOSE ALL
+                    </button>
+                </div>
+            </div>
+
+            <!-- P&L Summary Strip -->
+            <div class="pnl-strip">
+                <div class="pnl-item">
+                    <span class="pnl-label">EQUITY</span>
+                    <span id="pnl-equity" class="pnl-value">$10,000.00</span>
+                </div>
+                <div class="pnl-item">
+                    <span class="pnl-label">REALIZED P&L</span>
+                    <span id="pnl-realized" class="pnl-value neutral">$0.00</span>
+                </div>
+                <div class="pnl-item">
+                    <span class="pnl-label">UNREALIZED</span>
+                    <span id="pnl-unrealized" class="pnl-value neutral">$0.00</span>
+                </div>
+                <div class="pnl-item">
+                    <span class="pnl-label">TOTAL P&L</span>
+                    <span id="pnl-total" class="pnl-value neutral">$0.00</span>
+                </div>
+                <div class="pnl-item">
+                    <span class="pnl-label">WIN RATE</span>
+                    <span id="pnl-winrate" class="pnl-value">--%</span>
+                </div>
+                <div class="pnl-item">
+                    <span class="pnl-label">TRADES TODAY</span>
+                    <span id="pnl-trades" class="pnl-value">0</span>
+                </div>
+            </div>
+
+            <!-- Split Panel: Positions + Signals -->
+            <div class="trading-grid">
+
+                <!-- Left: Open Positions -->
+                <div class="trading-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">📈 OPEN POSITIONS</span>
+                        <span id="pos-count" class="panel-count">0</span>
+                    </div>
+                    <div class="panel-body" id="positions-container">
+                        <div class="empty-panel">
+                            <span class="empty-panel-icon">🔍</span>
+                            <span>No open positions</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: LLM Signal Feed -->
+                <div class="trading-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">🧠 LLM SIGNALS</span>
+                        <span id="signal-count" class="panel-count">0</span>
+                    </div>
+                    <div class="panel-body" id="signals-container">
+                        <div class="empty-panel">
+                            <span class="empty-panel-icon">🤖</span>
+                            <span>Waiting for headlines to analyze...</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Trade History -->
+            <div class="trading-panel full-width">
+                <div class="panel-header">
+                    <span class="panel-title">📋 TRADE HISTORY</span>
+                    <span id="history-count" class="panel-count">0</span>
+                </div>
+                <div class="panel-body" id="history-container">
+                    <div class="empty-panel">
+                        <span class="empty-panel-icon">📊</span>
+                        <span>No trades yet</span>
+                    </div>
+                </div>
+            </div>
+
         </main>
 
         <!-- ─── Stats Footer ─── -->
@@ -138,12 +245,16 @@
             </div>
             <div class="stats-right">
                 <span class="stat-item">
-                    <span class="stat-key">ENGINE</span>
-                    <span class="stat-val engine-tag">FOSS v1.0</span>
+                    <span class="stat-key">LLM</span>
+                    <span id="stat-llm" class="stat-val engine-tag">DeepSeek R1</span>
                 </span>
                 <span class="stat-item">
-                    <span class="stat-key">TTS</span>
-                    <span class="stat-val">EDGE-TTS</span>
+                    <span class="stat-key">ENGINE</span>
+                    <span class="stat-val engine-tag">v2.0</span>
+                </span>
+                <span class="stat-item">
+                    <span class="stat-key">MODE</span>
+                    <span id="stat-mode" class="stat-val" style="color:var(--accent-amber)">PAPER</span>
                 </span>
             </div>
         </footer>

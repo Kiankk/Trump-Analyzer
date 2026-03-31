@@ -14,3 +14,7 @@ edge-tts>=6.1.0
 
 # Data
 rich>=13.0.0
+
+# Trading Engine - NEW
+aiosqlite>=0.19.0
+ollama>=0.4.0

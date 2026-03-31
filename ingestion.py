@@ -44,7 +44,14 @@ class Headline:
 # ═══════════════════════════════════════════════════════════════
 
 headline_queue: asyncio.Queue = asyncio.Queue()
+trading_queue: asyncio.Queue = asyncio.Queue()   # NEW — fan-out for trading engine
 seen_ids: set = set()
+
+
+async def fan_out(headline):
+    """Push a headline to both the UI queue and the trading queue."""
+    await headline_queue.put(headline)
+    await trading_queue.put(headline)
 
 
 def _make_id(text: str) -> str:
@@ -154,7 +161,7 @@ async def rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
                                 url=link or None,
                                 priority=priority
                             )
-                            await queue.put(headline)
+                            await fan_out(headline)
                             logger.info(f"[{source_label}] {category} | {clean_title[:80]}")
                 
             except Exception as e:
@@ -212,7 +219,7 @@ async def sec_edgar_ingester(queue: asyncio.Queue, analyze_fn: Callable):
                             url=link or None,
                             priority=1
                         )
-                        await queue.put(headline)
+                        await fan_out(headline)
                         logger.info(f"[SEC_EDGAR] {title[:80]}")
                         
             except Exception as e:
@@ -289,7 +296,7 @@ async def telegram_ingester(queue: asyncio.Queue, analyze_fn: Callable,
                 title=clean_text[:200].strip(),
                 priority=priority
             )
-            await queue.put(headline)
+            await fan_out(headline)
             logger.info(f"[TELEGRAM] {category} | {clean_text[:80]}")
     
     await client.run_until_disconnected()

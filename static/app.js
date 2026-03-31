@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- * SQUAWK BOX — Client-Side Application
- * WebSocket real-time headline feed with audio squawk
+ * SQUAWK BOX v2.0 — Client-Side Application
+ * WebSocket real-time headline feed + LLM trading dashboard
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -23,7 +23,11 @@ const state = {
         'WEB/RSS': 0,
         'TELEGRAM': 0,
         'SEC_EDGAR': 0
-    }
+    },
+    // Trading state
+    currentView: 'news',
+    tradingEnabled: false,
+    signalCount: 0,
 };
 
 // ─── DOM References ─────────────────────────────────────────────
@@ -44,6 +48,32 @@ const dom = {
     statRss:       document.getElementById('stat-rss'),
     statTelegram:  document.getElementById('stat-telegram'),
     statSec:       document.getElementById('stat-sec'),
+    // Views
+    newsView:      document.getElementById('news-view'),
+    tradingView:   document.getElementById('trading-view'),
+    viewNewsBtn:   document.getElementById('view-news-btn'),
+    viewTradingBtn: document.getElementById('view-trading-btn'),
+    // Trading
+    tradingToggleBtn: document.getElementById('trading-toggle-btn'),
+    tradingToggleLabel: document.getElementById('trading-toggle-label'),
+    tcMode:        document.getElementById('tc-mode'),
+    tcLlm:         document.getElementById('tc-llm'),
+    tcLlmText:     document.getElementById('tc-llm-text'),
+    closeAllBtn:   document.getElementById('close-all-btn'),
+    // P&L
+    pnlEquity:     document.getElementById('pnl-equity'),
+    pnlRealized:   document.getElementById('pnl-realized'),
+    pnlUnrealized: document.getElementById('pnl-unrealized'),
+    pnlTotal:      document.getElementById('pnl-total'),
+    pnlWinrate:    document.getElementById('pnl-winrate'),
+    pnlTrades:     document.getElementById('pnl-trades'),
+    // Panels
+    positionsContainer: document.getElementById('positions-container'),
+    signalsContainer: document.getElementById('signals-container'),
+    historyContainer: document.getElementById('history-container'),
+    posCount:      document.getElementById('pos-count'),
+    signalCountEl: document.getElementById('signal-count'),
+    historyCount:  document.getElementById('history-count'),
 };
 
 
@@ -59,8 +89,34 @@ dom.gateBtn.addEventListener('click', () => {
         dom.app.classList.remove('hidden');
         connectWebSocket();
         startClock();
+        fetchTradingStatus();
     }, 400);
 });
+
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW SWITCHING
+// ═══════════════════════════════════════════════════════════════
+
+dom.viewNewsBtn.addEventListener('click', () => switchView('news'));
+dom.viewTradingBtn.addEventListener('click', () => switchView('trading'));
+
+function switchView(view) {
+    state.currentView = view;
+
+    if (view === 'news') {
+        dom.newsView.classList.remove('hidden');
+        dom.tradingView.classList.add('hidden');
+        dom.viewNewsBtn.classList.add('view-active');
+        dom.viewTradingBtn.classList.remove('view-active');
+    } else {
+        dom.newsView.classList.add('hidden');
+        dom.tradingView.classList.remove('hidden');
+        dom.viewNewsBtn.classList.remove('view-active');
+        dom.viewTradingBtn.classList.add('view-active');
+        fetchTradingStatus();
+    }
+}
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -126,7 +182,6 @@ function setConnectionStatus(connected) {
 function handleMessage(msg) {
     switch (msg.type) {
         case 'init':
-            // Batch of recent headlines on connect
             if (msg.headlines && msg.headlines.length > 0) {
                 dom.emptyState?.remove();
                 msg.headlines.reverse().forEach(h => addHeadline(h, false));
@@ -146,6 +201,31 @@ function handleMessage(msg) {
             attachAudioToHeadline(msg.id, msg.audio_url);
             break;
 
+        // ─── Trading Events ─────────────────────────────────
+        case 'trading_status':
+            updateTradingStatus(msg.data);
+            break;
+
+        case 'trade_signal':
+            addSignalCard(msg.data);
+            break;
+
+        case 'trade_executed':
+            handleTradeExecuted(msg.data);
+            break;
+
+        case 'trade_closed':
+            handleTradeClosed(msg.data);
+            break;
+
+        case 'position_update':
+            updatePositions(msg.data);
+            break;
+
+        case 'trading_toggle':
+            updateTradingToggle(msg.data.enabled);
+            break;
+
         case 'pong':
             break;
 
@@ -156,7 +236,7 @@ function handleMessage(msg) {
 
 
 // ═══════════════════════════════════════════════════════════════
-//  HEADLINE RENDERING
+//  HEADLINE RENDERING (unchanged logic)
 // ═══════════════════════════════════════════════════════════════
 
 function getSourceClass(source) {
@@ -179,7 +259,6 @@ function getSentimentIcon(sentiment) {
 }
 
 function addHeadline(data, isNew) {
-    // Update stats
     state.headlineCount++;
     dom.headlineCount.textContent = `${state.headlineCount} headlines`;
 
@@ -188,24 +267,17 @@ function addHeadline(data, isNew) {
     }
     updateStats();
 
-    // Check filters
     const visible = state.filters.sources.has(data.source) &&
                     state.filters.categories.has(data.category);
 
-    // Create element
     const el = document.createElement('div');
     el.className = `headline priority-${data.priority || 0}`;
     el.dataset.source = data.source;
     el.dataset.category = data.category;
     el.dataset.id = data.id;
 
-    if (!visible) {
-        el.style.display = 'none';
-    }
-
-    if (isNew) {
-        el.classList.add('headline-flash');
-    }
+    if (!visible) el.style.display = 'none';
+    if (isNew) el.classList.add('headline-flash');
 
     const titleContent = data.url
         ? `<a href="${escapeHtml(data.url)}" target="_blank" rel="noopener">${escapeHtml(data.title)}</a>`
@@ -220,7 +292,6 @@ function addHeadline(data, isNew) {
         ${data.audio_url ? `<span class="hl-audio" data-audio="${escapeHtml(data.audio_url)}" title="Play audio">🔊</span>` : ''}
     `;
 
-    // Audio click handler (if audio_url was already generated, e.g. historical load)
     const audioBtn = el.querySelector('.hl-audio');
     if (audioBtn) {
         audioBtn.addEventListener('click', () => {
@@ -228,20 +299,16 @@ function addHeadline(data, isNew) {
         });
     }
 
-    // Insert at top of feed
     dom.feed.prepend(el);
 
-    // Limit DOM size — remove oldest beyond 300
     while (dom.feed.children.length > 300) {
         dom.feed.removeChild(dom.feed.lastChild);
     }
 
-    // The text arrived! Play instant alert beep before TTS is even ready.
     if (isNew && visible && state.audioEnabled && data.priority > 0) {
         playAlertBeep(data.priority);
     }
 
-    // If historical load already has audio
     if (isNew && data.audio_url && state.audioEnabled && visible) {
         enqueueAudio(data.audio_url);
     }
@@ -250,7 +317,6 @@ function addHeadline(data, isNew) {
 function attachAudioToHeadline(id, url) {
     const el = document.querySelector(`.headline[data-id="${id}"]`);
     if (!el) return;
-    
     if (el.querySelector('.hl-audio')) return;
 
     const audioBtn = document.createElement('span');
@@ -265,9 +331,321 @@ function attachAudioToHeadline(id, url) {
     
     el.appendChild(audioBtn);
 
-    // Enqueue the voice generation
     if (state.audioEnabled && el.style.display !== 'none') {
         enqueueAudio(url);
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  TRADING — Signal Cards
+// ═══════════════════════════════════════════════════════════════
+
+function addSignalCard(data) {
+    state.signalCount++;
+    dom.signalCountEl.textContent = state.signalCount;
+
+    // Remove empty state
+    const empty = dom.signalsContainer.querySelector('.empty-panel');
+    if (empty) empty.remove();
+
+    const dirClass = data.direction === 'LONG' ? 'long' :
+                     data.direction === 'SHORT' ? 'short' : 'no-trade';
+
+    const confClass = data.confidence >= 0.85 ? 'high' :
+                      data.confidence >= 0.70 ? 'medium' : 'low';
+
+    const urgClass = data.urgency === 'IMMEDIATE' ? 'immediate' : '';
+
+    const timeStr = data.timestamp ? new Date(data.timestamp).toLocaleTimeString('en-US', { hour12: false }) : '';
+
+    const el = document.createElement('div');
+    el.className = `signal-card signal-${dirClass}`;
+
+    el.innerHTML = `
+        <div class="signal-top">
+            <span class="signal-dir ${dirClass}">${escapeHtml(data.direction)}</span>
+            <span class="signal-inst">${escapeHtml(data.instrument)}</span>
+            <span class="signal-conf ${confClass}">${(data.confidence * 100).toFixed(0)}%</span>
+            <span class="signal-urgency ${urgClass}">${escapeHtml(data.urgency)}</span>
+            ${data.is_tradeable ? '<span style="color:var(--bullish);font-size:10px">⚡ TRADEABLE</span>' : ''}
+            <span class="signal-time">${timeStr}</span>
+        </div>
+        <div class="signal-reasoning">${escapeHtml(data.reasoning)}</div>
+        <div class="signal-headline-ref">📰 ${escapeHtml(data.headline || '')}</div>
+    `;
+
+    dom.signalsContainer.prepend(el);
+
+    // Limit signal cards
+    while (dom.signalsContainer.children.length > 50) {
+        dom.signalsContainer.removeChild(dom.signalsContainer.lastChild);
+    }
+
+    // Play alert for tradeable signals
+    if (data.is_tradeable && state.audioEnabled) {
+        playTradeBeep();
+    }
+}
+
+function playTradeBeep() {
+    if (!state.audioEnabled) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    // Double beep for trade signals
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1047, audioCtx.currentTime); // C6
+    osc.frequency.setValueAtTime(1319, audioCtx.currentTime + 0.08); // E6
+    gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  TRADING — Position Management
+// ═══════════════════════════════════════════════════════════════
+
+function handleTradeExecuted(data) {
+    if (data.action === 'OPEN' && data.position) {
+        renderPosition(data.position);
+    }
+}
+
+function handleTradeClosed(data) {
+    // Remove position card
+    const posCard = document.querySelector(`.position-card[data-id="${data.position_id}"]`);
+    if (posCard) {
+        posCard.classList.add(data.pnl >= 0 ? 'trade-flash-win' : 'trade-flash-loss');
+        setTimeout(() => posCard.remove(), 1000);
+    }
+
+    // Update P&L
+    updatePnlValue(dom.pnlEquity, data.equity, false);
+    updatePnlValue(dom.pnlRealized, data.pnl, true);
+
+    // Add to history
+    addHistoryRow(data);
+
+    // Update position count
+    const posCards = dom.positionsContainer.querySelectorAll('.position-card');
+    dom.posCount.textContent = Math.max(0, posCards.length - 1); // -1 for the one being removed
+}
+
+function renderPosition(pos) {
+    // Remove empty state
+    const empty = dom.positionsContainer.querySelector('.empty-panel');
+    if (empty) empty.remove();
+
+    const el = document.createElement('div');
+    el.className = 'position-card';
+    el.dataset.id = pos.id;
+
+    const pnlClass = pos.unrealized_pnl >= 0 ? 'positive' : 'negative';
+    const pnlStr = formatPnl(pos.unrealized_pnl);
+
+    el.innerHTML = `
+        <span class="pos-direction ${pos.direction.toLowerCase()}">${pos.direction}</span>
+        <span class="pos-instrument">${escapeHtml(pos.instrument)}</span>
+        <div class="pos-info">
+            <span class="pos-prices">Entry: $${pos.entry_price.toLocaleString(undefined, {minimumFractionDigits:2})} | SL: $${pos.stop_loss.toLocaleString()} | TP: $${pos.take_profit.toLocaleString()}</span>
+            <span class="pos-headline">${escapeHtml(pos.headline_text || '')}</span>
+        </div>
+        <span class="pos-pnl ${pnlClass}">${pnlStr}</span>
+        <button class="pos-close-btn" onclick="closePosition('${pos.id}')">CLOSE</button>
+    `;
+
+    dom.positionsContainer.prepend(el);
+    dom.posCount.textContent = dom.positionsContainer.querySelectorAll('.position-card').length;
+}
+
+function updatePositions(data) {
+    if (!data || !data.positions) return;
+
+    // Update P&L strip
+    updatePnlValue(dom.pnlEquity, data.equity, false);
+    updatePnlValue(dom.pnlUnrealized, data.unrealized_pnl, true);
+    const totalPnl = (data.equity - 10000); // Assuming 10k starting
+    updatePnlValue(dom.pnlTotal, totalPnl, true);
+
+    // Update each position's P&L
+    data.positions.forEach(pos => {
+        const card = document.querySelector(`.position-card[data-id="${pos.id}"]`);
+        if (card) {
+            const pnlEl = card.querySelector('.pos-pnl');
+            if (pnlEl) {
+                const pnlClass = pos.unrealized_pnl >= 0 ? 'positive' : 'negative';
+                pnlEl.className = `pos-pnl ${pnlClass}`;
+                pnlEl.textContent = formatPnl(pos.unrealized_pnl);
+            }
+        }
+    });
+}
+
+function addHistoryRow(data) {
+    const empty = dom.historyContainer.querySelector('.empty-panel');
+    if (empty) empty.remove();
+
+    const pnlClass = data.pnl >= 0 ? 'positive' : 'negative';
+    const el = document.createElement('div');
+    el.className = `history-row ${data.pnl >= 0 ? 'trade-flash-win' : 'trade-flash-loss'}`;
+
+    el.innerHTML = `
+        <span class="hist-time">${new Date().toLocaleTimeString('en-US', { hour12: false })}</span>
+        <span class="hist-dir ${data.direction?.toLowerCase() || ''}">${data.direction || ''}</span>
+        <span class="hist-inst">${escapeHtml(data.instrument || '')}</span>
+        <span class="hist-prices">Entry: $${(data.entry_price || 0).toLocaleString(undefined, {minimumFractionDigits:2})} → Exit: $${(data.exit_price || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        <span class="hist-pnl ${pnlClass}">${formatPnl(data.pnl)}</span>
+        <span class="hist-reason">${escapeHtml(data.reason || '')}</span>
+    `;
+
+    dom.historyContainer.prepend(el);
+    const count = dom.historyContainer.querySelectorAll('.history-row').length;
+    dom.historyCount.textContent = count;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  TRADING — Controls
+// ═══════════════════════════════════════════════════════════════
+
+dom.tradingToggleBtn.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/trading/toggle', { method: 'POST' });
+        const data = await resp.json();
+        updateTradingToggle(data.trading_enabled);
+    } catch (e) {
+        console.error('Toggle trading failed:', e);
+    }
+});
+
+dom.closeAllBtn.addEventListener('click', async () => {
+    if (!confirm('⚠️ Close ALL open positions?')) return;
+    try {
+        const resp = await fetch('/api/trading/close-all', { method: 'POST' });
+        const data = await resp.json();
+        console.log('Close all result:', data);
+    } catch (e) {
+        console.error('Close all failed:', e);
+    }
+});
+
+async function closePosition(posId) {
+    try {
+        const resp = await fetch(`/api/trading/close/${posId}`, { method: 'POST' });
+        const data = await resp.json();
+        console.log('Close position result:', data);
+    } catch (e) {
+        console.error('Close position failed:', e);
+    }
+}
+
+function updateTradingToggle(enabled) {
+    state.tradingEnabled = enabled;
+    const btn = dom.tradingToggleBtn;
+    const label = dom.tradingToggleLabel;
+
+    if (enabled) {
+        btn.classList.remove('trading-off');
+        btn.classList.add('trading-on');
+        label.textContent = 'AUTO-TRADE ON';
+    } else {
+        btn.classList.remove('trading-on');
+        btn.classList.add('trading-off');
+        label.textContent = 'AUTO-TRADE OFF';
+    }
+}
+
+function updateTradingStatus(data) {
+    if (!data) return;
+
+    updateTradingToggle(data.enabled);
+
+    if (data.mode) {
+        dom.tcMode.textContent = data.mode === 'PAPER' ? '📝 PAPER MODE' : '🔴 LIVE MODE';
+    }
+
+    if (data.executor) {
+        updatePnlValue(dom.pnlEquity, data.executor.equity, false);
+        updatePnlValue(dom.pnlRealized, data.executor.realized_pnl, true);
+        updatePnlValue(dom.pnlUnrealized, data.executor.unrealized_pnl, true);
+        updatePnlValue(dom.pnlTotal, data.executor.total_pnl, true);
+
+        // Render existing positions
+        if (data.executor.positions) {
+            data.executor.positions.forEach(pos => renderPosition(pos));
+        }
+    }
+}
+
+async function fetchTradingStatus() {
+    try {
+        const resp = await fetch('/api/trading/status');
+        const data = await resp.json();
+
+        updateTradingToggle(data.trading_enabled);
+        
+        if (data.mode) {
+            dom.tcMode.textContent = data.mode === 'PAPER' ? '📝 PAPER MODE' : '🔴 LIVE MODE';
+        }
+
+        // LLM status
+        const llmDot = dom.tcLlm.querySelector('.llm-dot');
+        if (data.llm_healthy) {
+            llmDot.className = 'llm-dot online';
+            dom.tcLlmText.textContent = 'LLM ONLINE';
+        } else {
+            llmDot.className = 'llm-dot offline';
+            dom.tcLlmText.textContent = 'LLM OFFLINE';
+        }
+
+        if (data.executor) {
+            updatePnlValue(dom.pnlEquity, data.executor.equity, false);
+            updatePnlValue(dom.pnlRealized, data.executor.realized_pnl, true);
+            updatePnlValue(dom.pnlUnrealized, data.executor.unrealized_pnl, true);
+            updatePnlValue(dom.pnlTotal, data.executor.total_pnl, true);
+        }
+
+        if (data.signal_manager) {
+            dom.pnlTrades.textContent = data.signal_manager.daily_trade_count || 0;
+        }
+
+    } catch (e) {
+        console.error('Fetch trading status failed:', e);
+    }
+}
+
+// Auto-refresh trading status every 10s when on trading view
+setInterval(() => {
+    if (state.currentView === 'trading') {
+        fetchTradingStatus();
+    }
+}, 10000);
+
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function formatPnl(value) {
+    if (value === undefined || value === null) return '$0.00';
+    const prefix = value >= 0 ? '+$' : '-$';
+    return `${prefix}${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function updatePnlValue(el, value, colorize) {
+    if (!el) return;
+    if (colorize) {
+        el.className = `pnl-value ${value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'}`;
+    }
+    if (typeof value === 'number') {
+        el.textContent = colorize ? formatPnl(value) : `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 }
 
@@ -289,18 +667,16 @@ function playAlertBeep(priority) {
     gainNode.connect(audioCtx.destination);
     
     if (priority >= 2) {
-        // High priority: Sharp descending alert
         osc.type = 'square';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.15);
         gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
         osc.start();
         osc.stop(audioCtx.currentTime + 0.15);
     } else {
-        // Normal priority: Short ping
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(660, audioCtx.currentTime); // E5
+        osc.frequency.setValueAtTime(660, audioCtx.currentTime);
         gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         osc.start();
@@ -358,7 +734,7 @@ function playAudio(url, btn) {
 
 document.querySelectorAll('.filter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
-        const type = chip.dataset.filterType;   // 'source' or 'category'
+        const type = chip.dataset.filterType;
         const value = chip.dataset.value;
         const filterSet = type === 'source' ? state.filters.sources : state.filters.categories;
 
@@ -389,7 +765,6 @@ function applyFilters() {
 //  CONTROLS
 // ═══════════════════════════════════════════════════════════════
 
-// Audio toggle
 dom.audioToggle.addEventListener('click', () => {
     state.audioEnabled = !state.audioEnabled;
     const btn = dom.audioToggle;
@@ -403,12 +778,10 @@ dom.audioToggle.addEventListener('click', () => {
         btn.classList.remove('audio-on');
         btn.classList.add('audio-off');
         label.textContent = '🔇 MUTED';
-        // Clear audio queue
         state.audioQueue = [];
     }
 });
 
-// Clear feed
 dom.clearBtn.addEventListener('click', () => {
     dom.feed.innerHTML = '';
     state.headlineCount = 0;
@@ -419,6 +792,9 @@ dom.clearBtn.addEventListener('click', () => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'm' || e.key === 'M') {
         dom.audioToggle.click();
+    }
+    if (e.key === 't' || e.key === 'T') {
+        switchView(state.currentView === 'news' ? 'trading' : 'news');
     }
 });
 
