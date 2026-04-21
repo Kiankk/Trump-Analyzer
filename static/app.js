@@ -115,6 +115,9 @@ function switchView(view) {
         dom.viewNewsBtn.classList.remove('view-active');
         dom.viewTradingBtn.classList.add('view-active');
         fetchTradingStatus();
+        if (typeof fetchPerformanceData === "function") {
+            fetchPerformanceData();
+        }
     }
 }
 
@@ -625,6 +628,7 @@ async function fetchTradingStatus() {
 setInterval(() => {
     if (state.currentView === 'trading') {
         fetchTradingStatus();
+        fetchPerformanceData();
     }
 }, 10000);
 
@@ -833,6 +837,106 @@ function startClock() {
     }
     tick();
     setInterval(tick, 1000);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CHARTING & PERFORMANCE
+// ═══════════════════════════════════════════════════════════════
+
+let equityChartInstance = null;
+
+async function fetchPerformanceData() {
+    try {
+        const resp = await fetch('/api/trading/performance');
+        const data = await resp.json();
+        
+        if (data.equity_history && data.equity_history.length > 0) {
+            updateEquityChart(data.equity_history);
+        }
+    } catch (e) {
+        console.error('Failed to fetch performance data:', e);
+    }
+}
+
+function updateEquityChart(historyData) {
+    const ctx = document.getElementById('equityChart');
+    if (!ctx) return;
+
+    // Sort ascending by time
+    const sorted = [...historyData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    const labels = sorted.map(row => {
+        const d = new Date(row.timestamp + 'Z');
+        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    });
+    const dataPoints = sorted.map(row => row.equity);
+
+    const isProfitable = dataPoints[dataPoints.length - 1] >= dataPoints[0];
+    const lineColor = isProfitable ? '#10b981' : '#ef4444'; 
+    const bgColor = isProfitable ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+
+    if (equityChartInstance) {
+        equityChartInstance.data.labels = labels;
+        equityChartInstance.data.datasets[0].data = dataPoints;
+        equityChartInstance.data.datasets[0].borderColor = lineColor;
+        equityChartInstance.data.datasets[0].backgroundColor = bgColor;
+        equityChartInstance.update('none'); // Update without animation for smooth streaming
+    } else {
+        equityChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Equity ($)',
+                    data: dataPoints,
+                    borderColor: lineColor,
+                    backgroundColor: bgColor,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        ticks: { color: '#888', maxTicksLimit: 6 }
+                    },
+                    y: {
+                        grid: { color: '#2a2a2a' },
+                        ticks: {
+                            color: '#888',
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        theme: 'dark',
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2});
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 }
 
 

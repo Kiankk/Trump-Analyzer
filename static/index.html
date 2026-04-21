@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/index.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -171,6 +172,16 @@
                 <div class="pnl-item">
                     <span class="pnl-label">TRADES TODAY</span>
                     <span id="pnl-trades" class="pnl-value">0</span>
+                </div>
+            </div>
+
+            <!-- Equity Chart -->
+            <div class="trading-panel full-width" style="height: 250px; padding-bottom: 30px;">
+                <div class="panel-header">
+                    <span class="panel-title">📉 EQUITY CURVE</span>
+                </div>
+                <div class="panel-body" style="overflow: hidden; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                    <canvas id="equityChart"></canvas>
                 </div>
             </div>
 
