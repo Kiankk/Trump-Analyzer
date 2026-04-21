@@ -47,17 +47,26 @@ class Position:
     current_price: float = 0.0
     unrealized_pnl: float = 0.0
     headline_text: str = ""
+    high_watermark: float = 0.0
+    trailing_active: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     def update_pnl(self, current_price: float):
-        """Recalculate unrealized P&L."""
+        """Recalculate unrealized P&L and update high watermark."""
         self.current_price = current_price
+        if self.high_watermark == 0.0:
+            self.high_watermark = current_price
+
         if self.direction == 'LONG':
             self.unrealized_pnl = (current_price - self.entry_price) * self.quantity
+            if current_price > self.high_watermark:
+                self.high_watermark = current_price
         else:
             self.unrealized_pnl = (self.entry_price - current_price) * self.quantity
+            if current_price < self.high_watermark:
+                self.high_watermark = current_price
 
     def should_stop_loss(self, current_price: float) -> bool:
         if self.direction == 'LONG':
@@ -305,6 +314,24 @@ class PaperExecutor(BaseExecutor):
             try:
                 current_price = await self._get_price(position.instrument)
                 position.update_pnl(current_price)
+
+                # Update Trailing Stop
+                if getattr(cfg, 'ENABLE_TRAILING_STOP', False):
+                    activation_pct = cfg.TRAILING_STOP_ACTIVATION_PCT / 100.0
+                    trail_dist = cfg.TRAILING_STOP_DISTANCE_PCT / 100.0
+                    
+                    if position.direction == 'LONG':
+                        if (position.high_watermark - position.entry_price) / position.entry_price >= activation_pct:
+                            new_sl = position.high_watermark * (1 - trail_dist)
+                            if new_sl > position.stop_loss:
+                                position.stop_loss = round(new_sl, 4)
+                                position.trailing_active = True
+                    else: # SHORT
+                        if (position.entry_price - position.high_watermark) / position.entry_price >= activation_pct:
+                            new_sl = position.high_watermark * (1 + trail_dist)
+                            if new_sl < position.stop_loss:
+                                position.stop_loss = round(new_sl, 4)
+                                position.trailing_active = True
 
                 # Check stop loss
                 if position.should_stop_loss(current_price):

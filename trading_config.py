@@ -60,6 +60,11 @@ POSITION_SIZE_TIERS = {
 # Tight stops, fast exits — we're trading the initial news reaction
 DEFAULT_STOP_LOSS_PCT = 0.5     # 0.5% stop — tight for scalps
 DEFAULT_TAKE_PROFIT_RATIO = 2.0 # TP = SL * 2 (1:2 risk:reward)
+
+ENABLE_TRAILING_STOP = True
+TRAILING_STOP_ACTIVATION_PCT = 0.3  # Update SL after price moves 0.3% in favor
+TRAILING_STOP_DISTANCE_PCT = 0.2    # Distance to trail behind the high watermark
+
 MAX_TRADE_DURATION_SEC = 3600   # AUTO-CLOSE after 60 minutes max
 TRADE_DURATION_CHECK_SEC = 30   # Check trade duration every 30s
 
