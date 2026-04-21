@@ -849,6 +849,7 @@ function startClock() {
 // ═══════════════════════════════════════════════════════════════
 
 let equityChartInstance = null;
+let sentimentChartInstance = null;
 
 async function fetchPerformanceData() {
     try {
@@ -857,6 +858,9 @@ async function fetchPerformanceData() {
         
         if (data.equity_history && data.equity_history.length > 0) {
             updateEquityChart(data.equity_history);
+        }
+        if (data.sentiment_distribution) {
+            updateSentimentChart(data.sentiment_distribution);
         }
     } catch (e) {
         console.error('Failed to fetch performance data:', e);
@@ -936,6 +940,46 @@ function updateEquityChart(historyData) {
                                 return '$' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2});
                             }
                         }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateSentimentChart(dist) {
+    const ctx = document.getElementById('sentimentChart');
+    if (!ctx) return;
+
+    const dataPoints = [dist.BULLISH || 0, dist.NEUTRAL || 0, dist.BEARISH || 0];
+
+    if (sentimentChartInstance) {
+        sentimentChartInstance.data.datasets[0].data = dataPoints;
+        sentimentChartInstance.update('none');
+    } else {
+        sentimentChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Bullish', 'Neutral', 'Bearish'],
+                datasets: [{
+                    data: dataPoints,
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(156, 163, 175, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#888', usePointStyle: true, boxWidth: 6 }
                     }
                 }
             }

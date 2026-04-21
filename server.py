@@ -151,9 +151,11 @@ async def get_performance():
     db = await get_db()
     perf = await db.get_performance_stats()
     equity_history = await db.get_equity_history(200)
+    sentiment = await db.get_sentiment_distribution(100)
     return JSONResponse({
         "performance": perf,
         "equity_history": equity_history,
+        "sentiment_distribution": sentiment,
     })
 
 
