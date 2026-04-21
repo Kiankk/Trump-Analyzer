@@ -1,5 +1,26 @@
-# .gitignore
-.env
-*.session
-*.session-journal
+# Byte-compiled / optimized / DLL files
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDEs
+.vscode/
+.idea/
+
+# Virtual environments
+venv/
+env/
+ENV/
