@@ -457,7 +457,7 @@ function renderPosition(pos) {
         <span class="pos-direction ${pos.direction.toLowerCase()}">${pos.direction}</span>
         <span class="pos-instrument">${escapeHtml(pos.instrument)}</span>
         <div class="pos-info">
-            <span class="pos-prices">Entry: $${pos.entry_price.toLocaleString(undefined, {minimumFractionDigits:2})} | SL: $${pos.stop_loss.toLocaleString()} | TP: $${pos.take_profit.toLocaleString()}</span>
+            <span class="pos-prices">Entry: $${pos.entry_price.toLocaleString(undefined, {minimumFractionDigits:2})} | SL: <span class="pos-sl-val">$${pos.stop_loss.toLocaleString()}</span> | TP: $${pos.take_profit.toLocaleString()} <span class="trailing-tag" style="display:${pos.trailing_active ? 'inline-block' : 'none'}; background:#2563eb; color:white; padding: 2px 6px; border-radius:4px; font-size:10px; margin-left:8px;">[TRAILING]</span></span>
             <span class="pos-headline">${escapeHtml(pos.headline_text || '')}</span>
         </div>
         <span class="pos-pnl ${pnlClass}">${pnlStr}</span>
@@ -477,7 +477,7 @@ function updatePositions(data) {
     const totalPnl = (data.equity - 10000); // Assuming 10k starting
     updatePnlValue(dom.pnlTotal, totalPnl, true);
 
-    // Update each position's P&L
+    // Update each position's P&L and Trailing states
     data.positions.forEach(pos => {
         const card = document.querySelector(`.position-card[data-id="${pos.id}"]`);
         if (card) {
@@ -487,6 +487,10 @@ function updatePositions(data) {
                 pnlEl.className = `pos-pnl ${pnlClass}`;
                 pnlEl.textContent = formatPnl(pos.unrealized_pnl);
             }
+            const slEl = card.querySelector('.pos-sl-val');
+            if (slEl) slEl.textContent = '$' + pos.stop_loss.toLocaleString();
+            const trailingTag = card.querySelector('.trailing-tag');
+            if (trailingTag) trailingTag.style.display = pos.trailing_active ? 'inline-block' : 'none';
         }
     });
 }
