@@ -60,18 +60,18 @@ def _make_id(text: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  RSS Feed Configuration
-# ═══════════════════════════════════════════════════════════════
+RSS_FEEDS_FAST = {
+    # FinancialJuice — fast breaking news
+    "https://www.financialjuice.com/feed.ashx?xy=rss": "FIN_JUICE",
+}
 
-RSS_FEEDS = {
+RSS_FEEDS_SLOW = {
     # Trump & Policy
     "https://news.google.com/rss/search?q=%22Donald+Trump%22+OR+POTUS+OR+Tariffs+when:1h": "WEB/RSS",
     # Fed & Macro
     "https://news.google.com/rss/search?q=Federal+Reserve+OR+CPI+OR+NFP+OR+Powell+when:1h": "WEB/RSS",
     # General Finance
     "https://finance.yahoo.com/news/rssindex": "WEB/RSS",
-    # FinancialJuice — fast breaking news
-    "https://www.financialjuice.com/feed.ashx?xy=rss": "FIN_JUICE",
     # Geopolitics
     "https://news.google.com/rss/search?q=geopolitics+OR+military+OR+war+OR+sanctions+when:1h": "WEB/RSS",
     # Commodities
@@ -107,14 +107,10 @@ async def _fetch_feed(session: aiohttp.ClientSession, url: str):
 #  RSS Ingester
 # ═══════════════════════════════════════════════════════════════
 
-async def rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
-    """
-    Continuously polls all configured RSS feeds.
-    Pushes matching, deduplicated headlines to the queue.
-    """
-    logger.info(f"RSS Ingester started — monitoring {len(RSS_FEEDS)} feeds")
+async def _run_rss_loop(feeds_dict: dict, sleep_time: int, name: str, analyze_fn: Callable):
+    """Internal loop to fetch feeds continuously."""
+    logger.info(f"{name} started — monitoring {len(feeds_dict)} feeds every {sleep_time}s")
     
-    # Add browser headers to bypass FinancialJuice 403 blocks
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/rss+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -123,11 +119,10 @@ async def rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
     async with aiohttp.ClientSession(headers=headers) as session:
         while True:
             try:
-                # Fetch all feeds in parallel
-                fetch_tasks = [_fetch_feed(session, url) for url in RSS_FEEDS]
+                fetch_tasks = [_fetch_feed(session, url) for url in feeds_dict]
                 results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
                 
-                for (url, source_label), result in zip(RSS_FEEDS.items(), results):
+                for (url, source_label), result in zip(feeds_dict.items(), results):
                     if isinstance(result, Exception) or not result:
                         continue
                     if not hasattr(result, 'entries'):
@@ -139,7 +134,6 @@ async def rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
                         if not title:
                             continue
                         
-                        # Strip "FinancialJuice: " prefix from FJ headlines
                         clean_title = title
                         if source_label == 'FIN_JUICE' and clean_title.startswith('FinancialJuice: '):
                             clean_title = clean_title[len('FinancialJuice: '):]
@@ -163,11 +157,19 @@ async def rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
                             )
                             await fan_out(headline)
                             logger.info(f"[{source_label}] {category} | {clean_title[:80]}")
-                
+                            
             except Exception as e:
-                logger.error(f"RSS ingester cycle error: {e}")
+                logger.error(f"{name} cycle error: {e}")
             
-            await asyncio.sleep(15)
+            await asyncio.sleep(sleep_time)
+
+async def fast_rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
+    """Polls high-priority API feeds (FinancialJuice) aggressively."""
+    await _run_rss_loop(RSS_FEEDS_FAST, sleep_time=3, name="Fast RSS Ingester", analyze_fn=analyze_fn)
+
+async def slow_rss_ingester(queue: asyncio.Queue, analyze_fn: Callable):
+    """Polls bulk aggregator feeds (Google) gently to avoid rate limits."""
+    await _run_rss_loop(RSS_FEEDS_SLOW, sleep_time=30, name="Slow RSS Ingester", analyze_fn=analyze_fn)
 
 
 # ═══════════════════════════════════════════════════════════════

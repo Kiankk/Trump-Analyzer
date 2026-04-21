@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 
-from ingestion import Headline, headline_queue, trading_queue, rss_ingester, sec_edgar_ingester
+from ingestion import Headline, headline_queue, trading_queue, fast_rss_ingester, slow_rss_ingester, sec_edgar_ingester
 from filters import analyze_headline
 from tts_engine import synthesize_headline
 from llm_engine import get_llm_engine
@@ -443,7 +443,8 @@ async def startup():
 
     # ─── Launch Core Tasks ───────────────────────────────────
     asyncio.create_task(dispatcher())                              # Headlines → UI
-    asyncio.create_task(rss_ingester(headline_queue, analyze_headline))   # RSS feeds
+    asyncio.create_task(fast_rss_ingester(headline_queue, analyze_headline))   # Fast APIs (3s)
+    asyncio.create_task(slow_rss_ingester(headline_queue, analyze_headline))   # Bulk RSS (30s)
     asyncio.create_task(sec_edgar_ingester(headline_queue, analyze_headline))  # SEC EDGAR
 
     # ─── Initialize Live Price Feed ──────────────────────────
