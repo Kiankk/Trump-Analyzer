@@ -258,16 +258,18 @@ class TradingDatabase:
 
     async def get_sentiment_distribution(self, limit: int = 100) -> dict:
         cursor = await self._db.execute(
-            "SELECT sentiment, COUNT(*) as cnt FROM (SELECT sentiment FROM signals ORDER BY created_at DESC LIMIT ?) GROUP BY sentiment", (limit,)
+            "SELECT direction, COUNT(*) as cnt FROM (SELECT direction FROM signals ORDER BY created_at DESC LIMIT ?) GROUP BY direction", (limit,)
         )
         rows = await cursor.fetchall()
         dist = {"BULLISH": 0, "BEARISH": 0, "NEUTRAL": 0}
         for row in rows:
-            sentiment = row['sentiment'].upper()
-            if sentiment in dist:
-                dist[sentiment] += row['cnt']
+            dir_val = (row['direction'] or 'NO_TRADE').upper()
+            if dir_val == 'LONG':
+                dist["BULLISH"] += row['cnt']
+            elif dir_val == 'SHORT':
+                dist["BEARISH"] += row['cnt']
             else:
-                dist[sentiment] = row['cnt']
+                dist["NEUTRAL"] += row['cnt']
         return dist
 
     async def get_performance_stats(self) -> dict:

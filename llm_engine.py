@@ -246,8 +246,8 @@ class LLMEngine:
             ],
             "stream": False,
             "options": {
-                "temperature": 0.3,       # Low temp for consistent analysis
-                "num_predict": 512,        # Cap output length
+                "temperature": 0.0,
+                "num_predict": 4096,       # Needs to be large to accommodate <think> reasoning tags
                 "top_p": 0.9,
             }
         }
@@ -326,16 +326,12 @@ class LLMEngine:
         content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
 
         # Extract JSON from the response (handle markdown code blocks)
-        json_match = re.search(r'\{[^{}]*\}', content, re.DOTALL)
+        # We capture from the first { to the last } natively
+        json_match = re.search(r'(\{.*\})', content, re.DOTALL)
         if not json_match:
-            # Try to find JSON within code blocks
-            code_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
-            if code_match:
-                json_str = code_match.group(1)
-            else:
-                return None
+            return None
         else:
-            json_str = json_match.group(0)
+            json_str = json_match.group(1)
 
         try:
             parsed = json.loads(json_str)
